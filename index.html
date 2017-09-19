@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title></title>
+		<style>
+			#map{
+				position:absolute;
+				width:400px;
+				height:600px;
+				background:url(img/bg.jpg);
+				overflow: hidden;
+			}
+		</style>
+	</head>
+	<body style="height:1000px">
+		<!--地图盒子-->
+		<div id="map">
+			
+		</div>
+	</body>
+</html>
+<script type="text/javascript" src="js/tools.js"></script>
+<script type="text/javascript">
+	//首先考虑有哪些对象
+	//地图（战场） ， 我方飞机， 敌方飞机，子弹，礼品
+	//定义很多的类
+	//地图   new一个地图
+	
+	
+//都是共有的属性，可以用子类来继承
+	class Map{
+		   //obj是形参  是个对象
+		constructor(obj){
+			this.domObj=obj.domObj;
+			this.width=obj.width;
+			this.height=obj.height;
+			this.backgroundImg=obj.backgroundImg;
+			this.left=obj.left;
+			this.top=obj.top;
+			this.enemyPlane=[]; //先定义一个空数组   存放敌机
+			this.initUI();   //让初始化界面map对象的一个属性
+		}
+		//对象的方法
+		//初始化界面
+		initUI(){
+			this.domObj.style.width=this.width+"px"  ; //地图的宽度
+			this.domObj.style.height=this.height+"px";  //地图的高度
+			this.domObj.style.backgroundImg="url("+this.backgroundImg+")";   //地图的背景图
+			this.domObj.style.left=this.left+"px";   //
+			this.domObj.style.top=this.top+"px";
+		}
+		//
+	}
+	
+	//移动的物体  作为一个对象
+	class MoveObj{
+		constructor(obj){
+			//属性
+			this.map=obj.map;  //移动的物体也有自己的地图
+			this.domObj=null;
+			this.width=obj.width;
+			this.height=obj.height;
+			this.imgFile=obj.imgFile;   //移动物品图片路径
+			this.left=obj.left;  //  定位的位置
+			this.top=obj.top;
+			
+			this.incLeft=obj.incLeft;
+			this.incTop=obj.incTop;
+			//水品方向
+			this.directionH=obj.directionH;
+			//垂直方向
+		    this.directionV=obj.directionV;
+		    this.timer=null;
+		    if(obj.ord){
+		    	this.ord=obj.ord;
+		    }
+		    this.initUI();
+		    this.timeSpace=obj.timeSpace;
+		}
+		initUI(){
+			this.domObj=$create("img");
+			this.domObj.src=this.imgFile;
+			if(this.ord){
+				this.domObj.id=this.ord;
+			}
+			this.domObj.style.cssText="position:absolute;left:"+this.left+"px;top:"+this.top+"px;width:"+this.width+"px;height:"+this.height+"px";
+			this.map.domObj.appendChild(this.domObj);
+		}
+		//移动的物体有有个go的方法
+		go(){
+			let that=this;
+			this.timer=setInterval(function(){
+				that.goStep();
+			},this.timeSpace)
+		}
+		
+		//移动物体走的位置  用left 和top 来确定
+		goStep(){
+			this.left=this.left+this.incLeft*this.directionH;
+			this.top=this.top+this.incTop*this.directionV;
+			//检测this是不是bullet的一个实例，如果是返回true
+			if(this instanceof Bullet){
+				if(this.top+this.height<0){
+					//子弹的top小于子弹的高度   、、即是子弹已经在屏幕之外了
+					//可以让子弹消失了
+					//让子弹调over函数
+					this.over();
+					return;
+				}
+			}
+			this.boom && this.boom();  //如果存在this.boom,则调用this.boom();函数
+			//改变移动物体的宽高外观
+			this.domObj.style.left=this.left+"px";
+			this.domObj.style.top=this.top+"px";
+		}
+		//要阻止移动的物体在地图上的越界问题（地图的界）
+		preventBorder(){
+			//横向越界
+			if(this.left<0){  //d对象的左边《0
+				this.left=0;
+			}else if(this.left>this.map.width-this.width){
+				this.left=this.map.width-this.width;   //d地图的宽度-移动物体的宽度《移动物体的left，既可以将阻止移动物体越界了
+			
+			}
+			//纵向越界
+			if(this.top<0){
+				this.top=0;
+			}else if(this.top>this.map.height-this.height){
+				this.top=this.map.height-this.height;
+			}
+			
+		}
+	}
+	
+//运用继承来创建我方飞机
+class MyPlane extends MoveObj{
+	constructor(obj){
+		super(obj);   //子类继承父类的属性和方法
+		//血值
+		this.hp=obj.hp;
+		//能量
+		this.sp=obj.sp;
+		//创建一个子弹数组  、、
+		this.bullets=[];
+		this.initEvent();
+	}
+	//由于我方飞机可以移动  
+	//所以需要初始化事件
+	initEvent(){
+		//我方飞机需要鼠标放上可以拖拽  那么需要添加事件
+		let that=this;  //that是我烦飞机
+		this.map.domObj.onmousemove=function(event){   
+			let evt=event || window.event;
+			//鼠标距离页面的横向距离-地图的距离页面的横向距离-我方战机的宽度一半
+			that.left=evt.pageX-this.offsetLeft-that.width/2;
+			that.top=evt.pageY-this.offsetTop-that.height/2;
+		    that.preventBorder();  //调用防止越界的函数
+		    that.domObj.style.left=that.left+"px";
+		    that.domObj.style.top=that.top+"px";
+		}
+	}
+	
+	//我方飞机还有发射子弹方法
+	shoot(){
+		let that=this;
+		let ord=0;
+		//启用定时器，定时会产生子弹，并让子弹飞一会
+		setInterval(function(){
+			//确定子弹的位置   需要求出子弹的left 和top
+			//子弹的left=飞机的left+（飞机的宽度-子弹的宽度）/2
+			let left=that.left+(that.width-7)/3+4;
+			let top=that.top-18;
+			//new 子弹
+			ord++;
+			let b=new Bullet({
+				            map:that.map,
+				            width:7,
+				            height:18,
+				            imgFile:'img/bullet.png',
+				            left:left,
+				            top:top,
+				            incLeft:0,
+				            incTop:18*1.2,
+				            directionH:0,
+				            directionV:-1,
+				            timeSpace:100,
+				            sp:20,
+				            ord:ord,
+				            plane:that
+			            });
+		b.go();  //子弹可以走了
+		 
+		that.bullets.push(b);  //飞机的属性子弹里多一个子弹
+		},100);
+	}
+	
+	
+	
+	//我方飞机还有发射子弹方法2
+	shoot3(){
+		let that=this;
+		let ord=0;
+		//启用定时器，定时会产生子弹，并让子弹飞一会
+		setInterval(function(){
+			//确定子弹的位置   需要求出子弹的left 和top
+			//子弹的left=飞机的left+（飞机的宽度-子弹的宽度）/3
+			let left=that.left+(that.width-7)*2/3-4;
+			let top=that.top-18;
+			//new 子弹
+			ord++;
+			let b2=new Bullet({
+				            map:that.map,
+				            width:7,
+				            height:18,
+				            imgFile:'img/bullet.png',
+				            left:left,
+				            top:top,
+				            incLeft:0,
+				            incTop:18*1.2,
+				            directionH:0,
+				            directionV:-1,
+				            timeSpace:100,
+				            sp:20,
+				            ord:ord,
+				            plane:that
+			            });
+		b2.go();  //子弹可以走了
+		 
+		that.bullets.push(b2);  //飞机的属性子弹里多一个子弹
+		},100);
+	}
+}
+
+//子弹继承
+class Bullet extends MoveObj{
+	constructor(obj){
+		super(obj);
+		//所属飞机
+		this.plane=obj.plane;
+		this.sp=obj.sp;
+	}
+	//子弹的碰撞函数  、、子弹特有的方法
+	boom(){
+		console.log(this.map.enemyPlane.length);   //是地图里的敌机数组
+		for(let i=0;i<this.map.enemyPlane.length;i++){
+			let bLeft=this.left;
+			let bright=bLeft+this.width;
+			let eLeft=this.map.enemyPlane[i].left;
+			let eRight=eLeft+this.map.enemyPlane[i].width;
+			
+			let bTop=this.top;
+			let bBottom=bTop+this.height;
+			let eTop=this.map.enemyPlane[i].height;
+			let eBottom=eTop+this.map.enemyPlane[i].height;
+            //水平：子弹的right》=敌机的left &&  子弹的left《=敌机的right
+            //垂直：子弹的top《=敌机的bottom && 子弹的bottom》=敌机的top
+            if((bright>=eLeft && bLeft<=eRight) && (bTop<=eBottom && bBottom>=eTop)){
+            	//让敌机和子弹消失
+            	this.over();
+            	this.map.enemyPlane[i].over();
+            }
+			
+		}
+	}
+	//子弹的over
+	over(){
+		window.clearInterval(this.timer);
+		this.domObj.parentNode.removeChild(this.domObj);
+		//删除子弹的对象
+		let index=this.plane.bullets.indexOf(this);
+		this.plane.bullets.splice(index,1);
+	}
+}
+
+
+//地方战机
+class EnemyPlane extends MoveObj{
+	constructor(obj){
+		super(obj);
+		this.overImgs=obj.overImgs;
+		this.hp=obj.hp;
+	}
+	//敌机消失的过程
+	over(){
+		window.clearInterval(this.timer);
+		let that=this;
+		let i=0;
+		let myTimer=setInterval(function(){
+			if(i>that.overImgs.length-1){
+				window.clearInterval(myTimer);
+				that.domObj.parentNode.removeChild(that.domObj);   //
+				return;
+			}
+			that.domObj.src=that.overImgs[i];
+			i++;
+		},100);
+		//删除敌机对象
+		let index=this.map.enemyPlane.indexOf(this);
+		this.map.enemyPlane.splice(index,1);
+	}
+}
+//地方战机2
+class EnemyPlane2 extends MoveObj{
+	constructor(obj){
+		super(obj);
+		this.overImgs=obj.overImgs;
+		this.hp=obj.hp;
+	}
+	//敌机消失的过程
+	over(){
+		window.clearInterval(this.timer);
+		let that=this;
+		let i=0;
+		let myTimer=setInterval(function(){
+			if(i>that.overImgs.length-1){
+				window.clearInterval(myTimer);
+				that.domObj.parentNode.removeChild(that.domObj);   //
+				return;
+			}
+			that.domObj.src=that.overImgs[i];
+			i++;
+		},100);
+		//删除敌机对象
+		let index=this.map.enemyPlane.indexOf(this);
+		this.map.enemyPlane.splice(index,1);
+	}
+}
+
+
+//
+window.onload=function(){
+	//逻辑
+	//产生地图
+	var m=new Map({
+		domObj:$("#map"),
+		width:400,
+		height:600,
+		backgroundImg:"img/bg.jpg",
+		left:10,
+		top:10
+	});
+	
+	//我方战机
+	var myPlane=new MyPlane({
+		map:m,
+		width:98,
+		height:122,
+		imgFile:"img/me.png",
+		left:0,
+		top:100,
+		incLeft:0,
+		incTop:0,
+		directionH:0,
+		directionV:0,
+		timeSpace:0,
+		hp:100,
+		sp:20
+	});
+	//让子弹飞
+	myPlane.shoot();
+	myPlane.shoot3();
+	/*let shoot2=setTimeout(function(){
+	    myPlane.shoot2();
+	},1000);*/
+	//产生敌方飞机
+	
+	getEnemyPlane(m);   //m是实参
+	getEnemyPlane2(m);
+}
+
+function getEnemyPlane(map){
+	setInterval(function(){
+		//随机产生敌机的初始位置
+		let left=parseInt(Math.random()*(map.width-59));
+		//产生敌机
+		let enemyPlane=new EnemyPlane({
+			map:map,
+			width:59,
+			height:36,
+			imgFile:"img/plain1.png",
+			left:left,
+			top:-1*36,
+			incLeft:0,
+			incTop:5,
+			directionH:0,
+			directionV:1,
+			timeSpace:100,
+			hp:100,
+			sp:20,
+			overImgs:["img/plain1_die1.png","img/plain1_die2.png","img/plain1_die3.png"]
+			
+		});
+	//让敌机飞
+	enemyPlane.go();
+	//把敌机放在数组里
+	map.enemyPlane.push(enemyPlane);
+	},1000);
+}
+
+function getEnemyPlane2(map){
+	setInterval(function(){
+		//随机产生敌机的初始位置
+		let left=parseInt(Math.random()*(map.width-59));
+		//产生敌机
+		let enemyPlane=new EnemyPlane({
+			map:map,
+			width:165,
+			height:256,
+			imgFile:"img/plain3.png",
+			left:left,
+			top:-1*256,
+			incLeft:0,
+			incTop:5,
+			directionH:0,
+			directionV:1,
+			timeSpace:100,
+			hp:100,
+			sp:20,
+			overImgs:["img/plain3_die1.png","img/plain3_die2.png","img/plain3_die3.png","img/plain3_die4.png","img/plain3_die5.png"]
+			
+		});
+	//让敌机飞
+	enemyPlane.go();
+	//把敌机放在数组里
+	map.enemyPlane.push(enemyPlane);
+	},10000);
+}
+
+</script>
